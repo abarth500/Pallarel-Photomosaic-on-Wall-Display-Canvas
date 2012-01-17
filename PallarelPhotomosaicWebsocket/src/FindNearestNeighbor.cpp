@@ -10,6 +10,8 @@ using PallarelPhotomosaicWebsocket::FindNearestNeighbor;
 using namespace std;
 using namespace boost;
 
+bool FindNearestNeighbor::DEBUG = false;
+
 FindNearestNeighbor::FindNearestNeighbor(){
 	minValue = 0;
 	maxValue = 255;
@@ -112,13 +114,19 @@ string FindNearestNeighbor::findRandom(int nQuery,int nResult){
 	variate_generator<mt19937&, uniform_smallint<> > rand(gen, dst);
 	int *qData = new int[dimension];
 	for (int i = 0; i < nQuery; i++) {
-		//cout << "Q";
-		//cout << i << "\t";
+		if(DEBUG){
+			cout << "Q";
+			cout << i << "\t";
+		}
 		for (int j = 0; j < dimension; j++) {
 			qData[(i * dimension) + j] = rand();
-		//	cout << qData[(i * dimension) + j] << "\t";
+			if(DEBUG){
+				cout << qData[(i * dimension) + j] << "\t";
+			}
 		}
-		//cout << endl;
+		if(DEBUG){
+			cout << endl;
+		}
 	}
 	return find(qData,nQuery,nResult);
 }

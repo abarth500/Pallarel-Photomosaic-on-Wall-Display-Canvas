@@ -89,6 +89,7 @@ int main(int argc, char** argv) {
 		//fnn.findRandom(1,3);
 	}else{
 		//ƒfƒ‚ƒ‚[ƒh
+		fnn.DEBUG = true;
 		if(argc>1){
 			nInput = int(argv[1]);
 		}
@@ -96,21 +97,6 @@ int main(int argc, char** argv) {
 		fnn.findRandom(1,10);
 	}
 
-	//int numResult = 2;
-	//int numInput = 100;
-	//int numQuery = 2;
-	//int dimension = 2;
-	//int maxValue = 255;
-	//int minValue = 0;
-	
-	//PallarelPhotomosaicWebsocket::FindNearestNeighbor_ptr fnn(new PallarelPhotomosaicWebsocket::FindNearestNeighbor())
-	
-	/*
-	if (argc == 3) {
-		// TODO: input validation?
-		host = argv[1];
-		port = atoi(argv[2]);
-	}*/
 	std::string full_host;
 	std::stringstream temp;	
 	temp << host << ":" << port;

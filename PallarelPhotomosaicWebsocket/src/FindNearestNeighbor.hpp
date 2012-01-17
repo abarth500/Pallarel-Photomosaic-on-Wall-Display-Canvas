@@ -7,12 +7,11 @@
 using namespace std;
 using namespace boost;
 
-
 namespace PallarelPhotomosaicWebsocket {
 
 class FindNearestNeighbor {
 public:
-	static const bool DEBUG = false;
+	static bool DEBUG;
 	int minValue;
 	int maxValue;
 	int dimension;
