@@ -1,0 +1,7 @@
+;; file of .gitignore
+
+Debug/
+Demo/
+Release/
+websocketpp/
+ipch/

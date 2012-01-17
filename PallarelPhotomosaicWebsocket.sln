@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual C++ Express 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "websocketpp", "websocketpp\websocketpp.vcxproj", "{6E96B5E1-3A5E-40F4-9632-4541550F3E37}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PallarelPhotomosaicWebsocket", "PallarelPhotomosaicWebsocket\PallarelPhotomosaicWebsocket.vcxproj", "{B434367E-265D-4A69-9DC8-F7044FBF11A8}"
+	ProjectSection(ProjectDependencies) = postProject
+		{6E96B5E1-3A5E-40F4-9632-4541550F3E37} = {6E96B5E1-3A5E-40F4-9632-4541550F3E37}
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Demo|Win32 = Demo|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6E96B5E1-3A5E-40F4-9632-4541550F3E37}.Debug|Win32.ActiveCfg = Debug|Win32
+		{6E96B5E1-3A5E-40F4-9632-4541550F3E37}.Debug|Win32.Build.0 = Debug|Win32
+		{6E96B5E1-3A5E-40F4-9632-4541550F3E37}.Demo|Win32.ActiveCfg = Demo|Win32
+		{6E96B5E1-3A5E-40F4-9632-4541550F3E37}.Demo|Win32.Build.0 = Demo|Win32
+		{6E96B5E1-3A5E-40F4-9632-4541550F3E37}.Release|Win32.ActiveCfg = Release|Win32
+		{6E96B5E1-3A5E-40F4-9632-4541550F3E37}.Release|Win32.Build.0 = Release|Win32
+		{B434367E-265D-4A69-9DC8-F7044FBF11A8}.Debug|Win32.ActiveCfg = Debug|Win32
+		{B434367E-265D-4A69-9DC8-F7044FBF11A8}.Debug|Win32.Build.0 = Debug|Win32
+		{B434367E-265D-4A69-9DC8-F7044FBF11A8}.Demo|Win32.ActiveCfg = Demo|Win32
+		{B434367E-265D-4A69-9DC8-F7044FBF11A8}.Demo|Win32.Build.0 = Demo|Win32
+		{B434367E-265D-4A69-9DC8-F7044FBF11A8}.Release|Win32.ActiveCfg = Release|Win32
+		{B434367E-265D-4A69-9DC8-F7044FBF11A8}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
