@@ -53,14 +53,14 @@ void WSHandler::on_message(websocketpp::session_ptr client, const std::string &m
 					color = strtoul(colorhex, NULL, 16);
 					tData[i] = color;
 				}
-				nResultStr += fnn.find(tData,1,nResult);
+				knnResultStr += fnn.find(tData,1,nResult);
 				cout << "))" <<endl;
 				break;
 			}
-			
 		}
 	}
-	client->send(nResultStr);
+	//cout << knnResultStr;
+	client->send(knnResultStr);
 }
 
 void WSHandler::on_message(websocketpp::session_ptr client, const std::vector<unsigned char> &data) {

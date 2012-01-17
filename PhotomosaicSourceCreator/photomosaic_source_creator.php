@@ -75,6 +75,12 @@ if(!isset($_REQUEST["urls"])){
 	$urls = $_REQUEST["urls"];
 }elseif(is_string($_REQUEST["urls"])){
 	$urls = explode("|",$_REQUEST["urls"]);
+	if(count($urls)==1){
+		$url = $urls[0];
+		for($c = 0;$c < ($_REQUEST["X"] * $_REQUEST["Y"]);$c++){
+			$urls[$c] = $url;
+		}
+	}
 }else{
 	echo "No URL";
 	exit(1);
@@ -454,38 +460,59 @@ foreach($knn_query as $cl => $val){
 }
 if($TIME){
 	$time[] = array(
-		"key"=>"create bucker",
+		"key"=>"create bucket",
 		"t" => microtime(true)
 	);
 }
 if($DEBUG == 8){
+	$urls_js = "['".implode("','",$urls)."']";
 	print <<< ENDOFPRINT
 <html>
 <head>
 <script language="JavaScript">
-	var url = "${urls[0]}";
-	ws = new WebSocket(url);
-	ws.onopen = function(e) {
-		alert("Client: A connection to "+ws.URL+" has been opened");
-	};
-	
-	ws.onerror = function(e) {
-		alert("Client: An error occured, see console log for more details.");
-	};
-	
-	ws.onclose = function(e) {
-		alert("Client: The connection to "+url+" was closed.");
-	};
-	
-	ws.onmessage = function(e) {
-		//alert("Server: \\n" + e.data);
-	};
 	function knn(msg){
-		if (ws === undefined || ws.readyState != 1) {
+		if (wss[0] === undefined || wss[0].readyState != 1) {
 			alert("Client: Websocket is not avaliable for writing");
 			return;
 		}
-		ws.send(msg);
+		wss[0].send(msg);
+	}
+	function knn_search(query){
+		if(all_connect){
+			for(var c in wss){
+				wss[c].send(query[c]);
+			}
+		}
+	}
+	var urls = ${urls_js};
+	var all_connect = false;
+	var num_connect = 0;
+	var wss = [];
+	for(var c in urls){
+		wss[c] = new WebSocket(urls[c]);
+		wss[c].onopen = function(e){
+			alert("Open ("+(num_connect+1)+")");
+			if(++num_connect == urls.length){
+				all_connect = true;
+				alert("ALL CONNECT");
+			}
+		};
+		wss[c].onerror = function(e){
+			if(num_connect>0){
+				num_connect--;
+			}
+			alert("error");
+		};
+		wss[c].onclose = function(e){
+			if(num_connect>0){
+				num_connect--;
+			}
+			alert("close");
+		};
+		wss[c].onmessage = function(e){
+			var z = JSON.parse(e.data);
+			alert("kNN result:\\n\\n"+e.data);
+		};
 	}
 	function knns(msg){
 		if (ws === undefined || ws.readyState != 1) {
@@ -502,11 +529,13 @@ if($DEBUG == 8){
 </head>
 <body>
 ENDOFPRINT;
+	$query_all = array();
 	foreach($BUCKET as $bid => $bucket){
 		echo "<table>";
 		echo "<tr><td colspan=3 bgcolor=\"#000000\" style=\"color:#ffffff;\">Bucket:".$bid."</td></tr>";
 		$c = 0;
 		$bquery = "";
+		
 		foreach($bucket as $cl => $val){
 			if($bquery!=""){
 				$bquery .= "\\n";
@@ -515,12 +544,14 @@ ENDOFPRINT;
 			echo "<tr><td colspan=3>Query:<b>".count($val["cells"])."</b>,".$val["query"]."</td></tr>";
 			$bquery .= count($val["cells"]).",".$val["query"];
 		}
+		$query_all[] = $bquery;
 		echo "<tr><td colspan=3 bgcolor=\"#000000\" style=\"color:#ffffff;\"><input type=\"button\" value=\"Query\" onclick=\"knn('".$bquery."');\"/></td></tr>";
 		echo "</table>";
 	}
-	echo $c."<br/>";
-	
+	echo "<br/><br/><h3>knn Query</h3>";
+	echo "<input type=\"button\" value=\"Query to all servers\" onclick=\"knn_search(['".implode("','",$query_all)."']);\"/>";
 	if($TIME){
+		echo "<h3>Time</h3>";
 		$time[] = array(
 			"key"=>"finish",
 			"t" => microtime(true)

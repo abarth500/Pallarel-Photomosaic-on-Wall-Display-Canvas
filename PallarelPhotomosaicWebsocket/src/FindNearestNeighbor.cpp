@@ -60,7 +60,11 @@ string FindNearestNeighbor::find(int *qData,int nQuery,int nResult){
 		if(q != 0){
 			res << ",";
 		}
+		res << "[";
 		for (int r = 0; r < numResult; r++) {
+			if(r != 0){
+				res << ",";
+			}
 			if(DEBUG){
 				cout << "Q";
 				cout << q;
@@ -84,6 +88,7 @@ string FindNearestNeighbor::find(int *qData,int nQuery,int nResult){
 			res << "\"key\":\"" << targetKeys[indices[q][r]] << "\",";
 			res << "\"direction\":\"" << direction << "\"}";
 		}
+		res << "]";
 	}
 	res << "]";
 	return res.str();
