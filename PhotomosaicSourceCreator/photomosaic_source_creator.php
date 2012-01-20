@@ -20,11 +20,11 @@ $DEBUG = 0;
 //$DEBUG = 2; // Display the resized image
 //$DEBUG = 3; // Display vector as table format
 //$DEBUG = 4; // Display R command
-//$DEBUG = 5; //Display k-means result as text
+$DEBUG = 5; //Display k-means result as text
 //$DEBUG = 6; //Display k-means result as image
 //$DEBUG = 7; //Display all knn queries
 //$DEBUG = 8; //Display query bucket
-$DEBUG = 9; //knn Debug mode
+//$DEBUG = 9; //knn Debug mode
 if(isset($_REQUEST["DEBUG"])){
 	$DEBUG = $_REQUEST["DEBUG"];
 }
@@ -70,6 +70,15 @@ if(   !isset($_REQUEST["img"])
 	echo "No arg";
 	exit(1);
 }
+$nPara = 1;
+if(isset($_REQUEST["P"]) && is_numeric($_REQUEST["P"])){
+	$nPara = intval($_REQUEST["P"]);
+	if($nPara <= 0){
+		echo "P must be more than 0";
+			exit(1);
+	}
+}
+
 if(!isset($_REQUEST["urls"])){
 	$urls = array("ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166");
 }elseif(is_array($_REQUEST["urls"])){
@@ -180,10 +189,14 @@ if($DEBUG == 2){
 	imagejpeg($tar);
 	exit(0);
 }
-$vectorR = "";
+$vectorR = array();
 $vector = array();
+/*kmeans並列化テストの為の仮パラメータ*/$pk = 0;
 for($y = 0; $y + 2 < $tarH;$y += $_REQUEST["C"]){
 	for($x = 0; $x + 2 < $tarW;$x += $_REQUEST["C"]){
+		if(!isset($vectorR[$pk % $nPara])){
+			$vectorR[$pk % $nPara] = "";
+		}
 		$v = array();
 		for($cx = 0; $cx < $_REQUEST["C"]; $cx++){
 			for($cy = 0; $cy < $_REQUEST["C"]; $cy++){
@@ -192,15 +205,16 @@ for($y = 0; $y + 2 < $tarH;$y += $_REQUEST["C"]){
 				$g = ($rgb >> 8) & 0xFF;
 				$b = $rgb & 0xFF;
 				$v[]=$r;$v[]=$g;$v[]=$b;
-				$vectorR .= $r." ".$g." ".$b." ";
+				$vectorR[$pk % $nPara] .= $r." ".$g." ".$b." ";
 			}
 		}
 		$vector[] = $v;
-		$vectorR .= "\n";
+		$vectorR[$pk % $nPara] .= "\n";
+		$pk++;
 	}
 }
 if($DEBUG == 3){
-	nl2br($vectorR);
+	nl2br(implode("<hr>",$vectorR));
 	if($TIME){
 		$time[] = array(
 			"key"=>"finish",
@@ -211,12 +225,16 @@ if($DEBUG == 3){
 	}
 	exit(0);
 }
-//$fileR = array_search('uri', @array_flip(stream_get_meta_data($GLOBALS[mt_rand()]=tmpfile())));
-//file_put_contents($fileR,$vectorR);
-$cmdR = array_search('uri', @array_flip(stream_get_meta_data($GLOBALS[mt_rand()]=tmpfile())));
-$exeR = "R --slave --vanilla --quiet --file=".$cmdR." --args ".$K."";
-
-file_put_contents($cmdR , <<< END_RCMD
+$cmdR = array();
+$exeR = array();
+$outR = array();
+for($c = 0;$c < $nPara;$c++){
+	$cmdR[$c] = array_search('uri', @array_flip(stream_get_meta_data($GLOBALS[mt_rand()]=tmpfile())));
+	$f=0;
+	while(file_exists($cmdR[$c].++$f)){}
+	$outR[$c] = $cmdR[$c].$f;
+	$exeR[$c] = "R --slave --vanilla --quiet --file=".$cmdR[$c]." --args ".$K." ".$cmdR[$c]." ".$outR[$c]."& >/dev/null";
+	file_put_contents($cmdR[$c] , <<< END_RCMD
 library(RJSONIO)
 args <- commandArgs(TRUE)
 vect <- read.table("stdin")
@@ -232,11 +250,16 @@ result[["cluster"]]  <- k\$cluster
 result[["distance"]] <- sqrt(apply(dist^2, 1, sum))
 result[["direction"]]<- dir
 result_j <- toJSON(result)
-write(result_j,"")
+write(result_j,args[2])
+file.rename(args[2], args[3])
 END_RCMD
-);
+	);
+}
 if($DEBUG == 4){
-	echo $exeR."<br/><br/>".nl2br(file_get_contents($cmdR));
+	for($c =0;$c < $nPara;$c++){
+		echo "<p><b>Exe:</b>".$exeR[$c]."<br/>";
+		echo "<b>R:</b>".nl2br(file_get_contents($cmdR[$c]))."</p>";
+	}
 	if($TIME){
 		$time[] = array(
 			"key"=>"finish",
@@ -253,40 +276,43 @@ if($TIME){
 		"t" => microtime(true)
 	);
 }
-//exec($exeR);
-//$result_j = system($exeR);
-
-$descriptorspec = array(
-   0 => array("pipe", "r"),  // stdin は、子プロセスが読み込むパイプです。
-   1 => array("pipe", "w"),  // stdout は、子プロセスが書き込むパイプです。
-   2 => array("pipe", "w") // はファイルで、そこに書き込みます。
-);
-$procR = proc_open($exeR, $descriptorspec, $pipes, "/tmp", NULL);
-if (is_resource($procR)) {
-	fwrite($pipes[0],$vectorR);
-	fclose($pipes[0]);
-	$result_j = stream_get_contents($pipes[1]);
-	$error_j = stream_get_contents($pipes[2]);
-	fclose($pipes[1]);
-	fclose($pipes[2]);
-	proc_close($procR);
-}else{
-	echo "[ERROR] R command";
-	exit(1);
+//$descriptorspec = array();
+//$procR= array();
+//$pipes = array();
+$result_j = array();
+//$error_j = array();
+for($c = 0;$c < $nPara;$c++){
+	echo "Execute:".$c;
+	exec($exeR[$c]);
 }
-
+$result_j = array();
+$timeout = 10000;
+echo "Hi";sleep(10);
+for($c = 0;$c < $nPara;$c++){
+	echo "File".$c;
+	if(file_exists ($outR[$c])){
+		$result_j[$c] = json_decode(file_get_contents($outR[$c]));
+		echo "<p>result:<font color=\"blue\">".file_get_contents($outR[$c])."</font></p>";
+	}else{
+		if($timeout-- < 0){
+			echo "Timeout! R didn't return kmeans' result.";
+			exit(0);
+		}
+		echo "W";
+		usleep(50000);
+		$c--;
+	}
+	break;
+}
 if($TIME){
 	$time[] = array(
 		"key"=>"kmeans",
 		"t" => microtime(true)
 	);
 }
-//$result_j = file_get_contents($fileR);
-$result = json_decode($result_j,true);
 if($DEBUG == 5){
-	echo $result_j."<hr>";
-	echo $error_j;
-	echo "<hr>".$vectorR;
+	echo "<b>RESULT:</b>".implode("<br/><font color=\"red\">**********</font><br/>",$result_j)."<hr>";
+	echo "<hr><b>Vector:</b>".implode("<br/><font color=\"red\">**********</font><br/>",$vectorR);
 	if($TIME){
 		$time[] = array(
 			"key"=>"finish",
