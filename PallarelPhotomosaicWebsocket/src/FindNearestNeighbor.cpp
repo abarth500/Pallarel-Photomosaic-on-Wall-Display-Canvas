@@ -55,7 +55,9 @@ string FindNearestNeighbor::find(int *qData,int nQuery,int nResult){
 	index->knnSearch(query, indices, dists, numResult, flann::SearchParams(128));
 	
 	stringstream res;
-	res << "[";
+	if(numQuery != 1){
+		res << "[";
+	}
 	for (int q = 0; q < numQuery; q++) {
 		if(q != 0){
 			res << ",";
@@ -86,11 +88,13 @@ string FindNearestNeighbor::find(int *qData,int nQuery,int nResult){
 			}
 			res << "{\"distance\":" << sqrt(dists[q][r]) << ",";
 			res << "\"key\":\"" << targetKeys[indices[q][r]] << "\",";
-			res << "\"direction\":\"" << direction << "\"}";
+			res << "\"direction\":\"" << direction << "\"}"<<endl;
 		}
 		res << "]";
 	}
-	res << "]";
+	if(numQuery != 1){
+		res << "]";
+	}
 	return res.str();
 }
 

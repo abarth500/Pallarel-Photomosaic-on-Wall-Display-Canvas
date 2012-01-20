@@ -16,15 +16,84 @@ using namespace boost;
 
 int main(int argc, char** argv) {
 	PallarelPhotomosaicWebsocket::FindNearestNeighbor fnn;
+	string inputfile;
+	int inputfilelines = 0;
+	int inputfileoffset = 0;
 	int nInput = 5000;
 	int dim = 27;
 	string host = "192.168.1.1";
 	short port = 6166;
-	if(argc>2){
+	int numX = 1;
+	int numY = 1;
+	int nTile = numX * numY;
+	if(argc == 1){
 		//本気モード
-		nInput =atoi(argv[1]);
-		host = argv[2];
-		string inputfile = string(argv[3]);
+		string readBuffer;
+		int line = 0;
+		string fileHost = "PPW.tile";
+		ifstream fho(fileHost);
+		if(!fho){
+			cerr << "can not open: "<< fileHost << endl;
+			exit(0);
+		}
+		while(getline(fho, readBuffer)){
+			switch(line++){
+			case 0:
+				numX = atoi(readBuffer.data());
+				break;
+			case 1:
+				numY = atoi(readBuffer.data());
+				break;
+			case 2:
+				//ip(1)
+				host = readBuffer;
+				break;
+			case 3:
+				//ip(2)
+				host += "." + readBuffer;
+				break;
+			case 4:
+				//ip(3)
+				host += "." + readBuffer;
+				nTile = atoi(readBuffer.data())-1;
+				break;
+			case 5:
+				host += "." + readBuffer; 
+				nTile = nTile * numX + (atoi(readBuffer.data())-1);
+				break;
+			}
+		}
+		fho.close();
+		delete fho;
+		line = 0;
+		string fileParam = "PPW.txt";
+		ifstream fcfg(fileParam);
+		if(!fcfg){
+			cerr << "can not open: "<< fileParam << endl;
+			exit(0);
+		}
+		while(getline(fcfg, readBuffer)){
+			switch(line++){
+			case 0:
+				inputfilelines = atoi(readBuffer.data());
+				break;
+			case 1:
+				nInput = atoi(readBuffer.data());
+				inputfileoffset = ((inputfilelines - nInput)/ (numX * numY)) + (nTile - 1);
+				break;
+			case 2:
+				inputfile = readBuffer;
+				break;
+			}
+		}
+		fcfg.close();
+		delete fcfg;
+		cout << "Setting" << endl;
+		cout << "\tFile:     \t" << inputfile << endl;
+		cout << "\tNum Image:\t" << inputfilelines << endl;
+		cout << "\tUses:     \t" << nInput << " from #" << inputfileoffset << endl << endl;
+		//nInput = atoi(argv[1]);
+		//host = argv[2];
 		ifstream fin(inputfile);
 		if(!fin){
 			cerr << " not open." << endl;
@@ -33,7 +102,6 @@ int main(int argc, char** argv) {
 		typedef boost::escaped_list_separator<char> Separator;
 		typedef boost::tokenizer<Separator, std::string::iterator> Tokenizer;
 		Separator separator;
-		std::string readBuffer;
 		int l = 0;
 		int *tData = new int[(nInput * dim)];
 		string *tUrls = new string[nInput];
@@ -42,6 +110,9 @@ int main(int argc, char** argv) {
 		int color;
 		int ln = 0;
 		while(std::getline(fin, readBuffer)){
+			if(inputfileoffset-- > 0){
+				continue;
+			}
 			if(ln % 1000 == 0){
 				cout << endl << "[";
 				cout.width(7);

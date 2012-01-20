@@ -23,7 +23,7 @@ void WSHandler::on_message(websocketpp::session_ptr client, const std::string &m
 	int color;
 	int nResult = 0;
 	string nResultStr;
-	string knnResultStr = "";
+	string knnResultStr = "[";
 	bool first = true;
 	ss<<msg;
 	while(getline(ss,readBuffer)){
@@ -33,14 +33,9 @@ void WSHandler::on_message(websocketpp::session_ptr client, const std::string &m
 		first = false;
 		Tokenizer tokens(readBuffer.begin(), readBuffer.end(), separator);
 		int f = 0;
-		cout<<"[]";
 		for (Tokenizer::iterator tok_iter = tokens.begin(); tok_iter != tokens.end(); ++tok_iter) {
-			
-			cout<<"=>";
 			switch(f++){			
 			case 0:
-				cout << "id\t";
-				cout << *tok_iter;
 				nResultStr = *tok_iter;
 				nResult = atoi(nResultStr.c_str());
 				break;
@@ -53,14 +48,15 @@ void WSHandler::on_message(websocketpp::session_ptr client, const std::string &m
 					color = strtoul(colorhex, NULL, 16);
 					tData[i] = color;
 				}
-				knnResultStr += fnn.find(tData,1,nResult);
-				cout << "))" <<endl;
+				knnResultStr += fnn.find(tData,1,nResult) + "\n";
+				cout << ".";
 				break;
 			}
 		}
 	}
 	//cout << knnResultStr;
-	client->send(knnResultStr);
+	cout << "|";
+	client->send(knnResultStr+"]");
 }
 
 void WSHandler::on_message(websocketpp::session_ptr client, const std::vector<unsigned char> &data) {

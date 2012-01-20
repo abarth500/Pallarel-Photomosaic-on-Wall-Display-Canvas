@@ -23,7 +23,8 @@ $DEBUG = 0;
 //$DEBUG = 5; //Display k-means result as text
 //$DEBUG = 6; //Display k-means result as image
 //$DEBUG = 7; //Display all knn queries
-$DEBUG = 8; //Display query bucket
+//$DEBUG = 8; //Display query bucket
+$DEBUG = 9; //knn Debug mode
 if(isset($_REQUEST["DEBUG"])){
 	$DEBUG = $_REQUEST["DEBUG"];
 }
@@ -32,7 +33,7 @@ $TIME = FALSE;
 $TIME = TRUE; //Display time
 
 if($TIME){
-	$time = array(
+	$time[] = array(
 		"key"=>"STARTEXECUTION",
 		"t" => microtime(true)
 	);
@@ -210,16 +211,16 @@ if($DEBUG == 3){
 	}
 	exit(0);
 }
-$fileR = array_search('uri', @array_flip(stream_get_meta_data($GLOBALS[mt_rand()]=tmpfile())));
-file_put_contents($fileR,$vectorR);
+//$fileR = array_search('uri', @array_flip(stream_get_meta_data($GLOBALS[mt_rand()]=tmpfile())));
+//file_put_contents($fileR,$vectorR);
 $cmdR = array_search('uri', @array_flip(stream_get_meta_data($GLOBALS[mt_rand()]=tmpfile())));
-$exeR = "R --slave --vanilla --quiet --file=".$cmdR." --args ".$K." ".$fileR." > /dev/null";
+$exeR = "R --slave --vanilla --quiet --file=".$cmdR." --args ".$K."";
 
 file_put_contents($cmdR , <<< END_RCMD
 library(RJSONIO)
 args <- commandArgs(TRUE)
-vect <- read.table(args[2])
-k <- kmeans(vect,as.integer(args[1]))
+vect <- read.table("stdin")
+k <- kmeans(vect,as.integer(args[1]),iter.max=30)
 cnt  <- round(k\$centers)
 dist <- cnt[k\$cluster[],]-vect[]
 dir  <- t(apply(dist,1,function(dist){dist>=0}))
@@ -231,7 +232,7 @@ result[["cluster"]]  <- k\$cluster
 result[["distance"]] <- sqrt(apply(dist^2, 1, sum))
 result[["direction"]]<- dir
 result_j <- toJSON(result)
-write(result_j,args[2])
+write(result_j,"")
 END_RCMD
 );
 if($DEBUG == 4){
@@ -252,17 +253,40 @@ if($TIME){
 		"t" => microtime(true)
 	);
 }
-exec($exeR);
+//exec($exeR);
+//$result_j = system($exeR);
+
+$descriptorspec = array(
+   0 => array("pipe", "r"),  // stdin は、子プロセスが読み込むパイプです。
+   1 => array("pipe", "w"),  // stdout は、子プロセスが書き込むパイプです。
+   2 => array("pipe", "w") // はファイルで、そこに書き込みます。
+);
+$procR = proc_open($exeR, $descriptorspec, $pipes, "/tmp", NULL);
+if (is_resource($procR)) {
+	fwrite($pipes[0],$vectorR);
+	fclose($pipes[0]);
+	$result_j = stream_get_contents($pipes[1]);
+	$error_j = stream_get_contents($pipes[2]);
+	fclose($pipes[1]);
+	fclose($pipes[2]);
+	proc_close($procR);
+}else{
+	echo "[ERROR] R command";
+	exit(1);
+}
+
 if($TIME){
 	$time[] = array(
 		"key"=>"kmeans",
 		"t" => microtime(true)
 	);
 }
-$result_j = file_get_contents($fileR);
+//$result_j = file_get_contents($fileR);
 $result = json_decode($result_j,true);
 if($DEBUG == 5){
-	echo $result_j;
+	echo $result_j."<hr>";
+	echo $error_j;
+	echo "<hr>".$vectorR;
 	if($TIME){
 		$time[] = array(
 			"key"=>"finish",
@@ -353,7 +377,9 @@ for($c=0;$c<count($result["cluster"]);$c++){
 	$cluster = $result["cluster"][$c] - 1;
 	$knn_query[$cluster]["cells"][] = array(
 		"distance" => $result["distance"][$c],
-		"direction"=> implode("",array_values($result["direction"][$c]))
+		"direction"=> implode("",array_values($result["direction"][$c])),
+		"x" => $c % ($tarW / $_REQUEST["C"]),
+		"y" => floor($c / ($tarW / $_REQUEST["C"]))
 	);
 }
 if($TIME){
@@ -403,13 +429,15 @@ ENDOFPRINT;
 		}else{
 			$bgcol = "#ffffff";
 		}
-		echo "<tr><td colspan=3 bgcolor=\"#c7dc68\">Cluster:".$cl."</td></tr>";
-		echo "<tr><td colspan=3><input type=\"button\" value=\"Query\" onclick=\"knn('".count($val["cells"]).",".$val["query"]."');\"/>:<b>".count($val["cells"])."</b>,".$val["query"]."</td></tr>";
+		echo "<tr><td colspan=5 bgcolor=\"#c7dc68\">Cluster:".$cl."</td></tr>";
+		echo "<tr><td colspan=5><input type=\"button\" value=\"Query\" onclick=\"knn('".count($val["cells"]).",".$val["query"]."');\"/>:<b>".count($val["cells"])."</b>,".$val["query"]."</td></tr>";
 		foreach($val["cells"] as $cls => $cell){
 			echo "<tr bgcolor=\"".$bgcol."\">";
 			if($cls == 0){
 				echo "<td rowspan=".count($val["cells"])." bgcolor=\"#475c28\">&nbsp;</td>";
 			}
+			echo "<td>x=".$cell["x"]."</td>";
+			echo "<td>y=".$cell["y"]."</td>";
 			echo "<td>".$cell["distance"]."</td>";
 			echo "<td>".$cell["direction"]."</td>";
 			echo "</tr>";
@@ -565,11 +593,83 @@ ENDOFPRINT;
 ENDOFPRINT;
 	exit(0);
 }
+$query_var = array();
+$cells = array();
+foreach($BUCKET as $bid => $bucket){
+	$q_line = array();
+	$cells[$bid] = array();
+	foreach($bucket as $cl => $val){
+		$q_line[] = array(count($val["cells"]),$val["query"]);
+		$cells[$bid][$cl] = $val["cells"];
+	}
+	$query_var[] = $q_line;
+}
 imagedestroy($tar);
 if($TIME){
 	$time[] = array(
-		"key"=>"FINISH",
+		"key"=>"k-means Finish",
 		"t" => microtime(true)
 	);
 }
-?>
+?><html>
+<head>
+<script language="JavaScript">
+<?php if($TIME){ ?>
+var time_kmeans = <?php echo $time[count($time)-1]["t"] - $time[0]["t"]; ?>;
+<?php } ?>
+var time_start = new Date() / 1000.0;
+var knn_search = function (query,cells){
+	var urls = <?php echo "['".implode("','",$urls)."']"; ?>;
+	for(var id in urls){
+		var conn = new connector(id,urls[id],query[id],cells[id]);
+	}
+}
+var log = function(msg){
+<?php if($DEBUG!=0){ ?>
+	document.getElementById("debug").innerHTML += '<p>'+msg+'<p>';
+<?php } ?>
+}
+var connector = function(id,url,query,cells){
+	var wss = new WebSocket(url);
+	wss.onopen = function(e){
+		//log("<b>WebSocket</b>(open:"+id+")");
+		var qstring = [];
+		for(var c in query){
+			qstring.push(query[c].join(","));
+		}
+		if (wss === undefined || wss.readyState != 1) {
+			log("Client: Websocket is not avaliable for writing");
+			return;
+		}else{
+			//console.log(qstring.join("\n"));
+			wss.send(qstring.join("\n"));
+		}
+	};
+	wss.onerror = function(e){
+		//log("<b>WebSocket</b>(error:"+id+")");
+	};
+	wss.onclose = function(e){
+		//log("<b>WebSocket</b>(close:"+id+")");
+	};
+	wss.onmessage = function(msg){
+		log("<b>TIME</b>(knn:"+id+"): "+((new Date() / 1000.0) -time_start)+" sec.");
+		console.log(msg.data);
+		var knn_results = JSON.parse(msg.data);
+		for(var c in knn_results){
+			findNear(cells[c],knn_results[c]);
+		}
+		wss.close();
+	};
+}
+var findNear = function(cells,knn){
+	//alert(cells.length + "\n" + knn.length);
+	//log(JSON.stringify(cells) + "<br/><b>" + JSON.stringify(knn)  + "</b>");
+}
+window.onload = function(){
+	log("<b>TIME</b>(kmeans): "+time_kmeans+" sec.");
+	knn_search(<?php echo str_replace(",",",\n",json_encode($query_var)); ?>,<?php echo str_replace(",",",\n",json_encode($cells)); ?>);
+};
+</script>
+</head>
+<body>&nbsp;<?php echo $DEBUG==0?'':'<div id="debug"></div>'; ?></body>
+</html>
