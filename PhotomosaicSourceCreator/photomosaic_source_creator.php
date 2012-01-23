@@ -19,15 +19,17 @@ $DEBUG = 0;
 //$DEBUG = 1; // Display metadata of the resized image
 //$DEBUG = 2; // Display the resized image
 //$DEBUG = 3; // Display vector as table format
-//$DEBUG = 4; // Display R command
-//$DEBUG = 5; //Display k-means result as text
-//$DEBUG = 6; //Display k-means result as image
-//$DEBUG = 7; //Display all knn queries
-//$DEBUG = 8; //Display query bucket
-$DEBUG = 9; //knn Debug mode
+//$DEBUG = 4;// Display diff clustering
+//$DEBUG = 5; // Display R command
+//$DEBUG = 6; //Display k-means result as text
+$DEBUG = 7; //Display k-means result as image
+//$DEBUG = 8; //Display all knn queries
+//$DEBUG = 9; //Display query bucket
+//$DEBUG = 10; //knn Debug mode
 if(isset($_REQUEST["DEBUG"])){
 	$DEBUG = $_REQUEST["DEBUG"];
 }
+$debug = 0;//internal var of debug system
 
 $TIME = FALSE;
 $TIME = TRUE; //Display time
@@ -69,6 +71,10 @@ if(   !isset($_REQUEST["img"])
 ){
 	echo "No arg";
 	exit(1);
+}
+$nParallel = 8;
+if(isset($_REQUEST["P"]) and is_numeric($_REQUEST["P"])){
+	$nParallel = intval($_REQUEST["P"]);
 }
 if(!isset($_REQUEST["urls"])){
 	$urls = array("ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166","ws://localhost:6166");
@@ -152,7 +158,7 @@ if($TIME){
 		"t" => microtime(true)
 	);
 }
-if($DEBUG == 1){
+if($DEBUG == ++$debug){// Display metadata of the resized image
 	echo "tarW:$tarW<br/>tarH:$tarH<br/>distX:$distX<br/>distY:$distY<br/>distW:$distW<br/>distH:$distH<br/>orgW:$orgW<br/>orgH:$orgH<br/>";
 	if($TIME){
 		$time[] = array(
@@ -164,7 +170,7 @@ if($DEBUG == 1){
 	}
 	exit(0);
 }
-if($DEBUG == 2){
+if($DEBUG == ++$debug){// Display the resized image
 	if($TIME){
 		$time[] = array(
 			"key"=>"finish",
@@ -180,27 +186,69 @@ if($DEBUG == 2){
 	imagejpeg($tar);
 	exit(0);
 }
-$vectorR = "";
+$vectorR = array();
 $vector = array();
-for($y = 0; $y + 2 < $tarH;$y += $_REQUEST["C"]){
-	for($x = 0; $x + 2 < $tarW;$x += $_REQUEST["C"]){
+$diff = "";
+/**kmeans振り分けテスト仮変数*/
+$KsR = array();
+for($p=0;$p<$nParallel;$p++){
+	$KsR[] = $K / $nParallel;
+}
+
+/*kmeans振り分けテスト仮変数*/$pp = 0;
+function getDiff($v,$c){
+	$center = round(($c - 1) / 2);
+	$ctR = $v[($center + $center * $c) * 3];
+	$ctG = $v[($center + $center * $c) * 3 + 1];
+	$ctB = $v[($center + $center * $c) * 3 + 2];
+	$poi = array(
+		array(0,0),
+		array($center,0),
+		array($c-1,0),
+		array($c-1,$center),
+		array($c-1,$c-1),
+		array($center,$c-1),
+		array(0,$c-1),
+		array(0,$center)
+	);
+	$diff = "";
+	foreach($poi as $p){
+		if($diff != ""){
+			$diff .= " ";
+		}
+		$poR = $v[($p[0] + $p[1] * $c) * 3];
+		$poG = $v[($p[0] + $p[1]  * $c) * 3 + 1];
+		$poB = $v[($p[0] + $p[1]  * $c) * 3 + 2];
+		$diff .= $ctR - $poR." ";
+		$diff .= $ctG - $poG." ";
+		$diff .= $ctB - $poB;
+	}
+	return $diff;
+}
+for($y = 0; $y + $_REQUEST["C"] - 1 < $tarH;$y += $_REQUEST["C"]){
+	for($x = 0; $x + $_REQUEST["C"] - 1 < $tarW;$x += $_REQUEST["C"]){
 		$v = array();
-		for($cx = 0; $cx < $_REQUEST["C"]; $cx++){
-			for($cy = 0; $cy < $_REQUEST["C"]; $cy++){
+		if(!isset($vectorR[$pp%$nParallel])){
+			$vectorR[$pp%$nParallel] = "";
+		}
+		for($cy = 0; $cy < $_REQUEST["C"]; $cy++){
+			for($cx = 0; $cx < $_REQUEST["C"]; $cx++){
 				$rgb = imagecolorat($tar, $x + $cx, $y + $cy);
 				$r = ($rgb >> 16) & 0xFF;
 				$g = ($rgb >> 8) & 0xFF;
 				$b = $rgb & 0xFF;
 				$v[]=$r;$v[]=$g;$v[]=$b;
-				$vectorR .= $r." ".$g." ".$b." ";
+				$vectorR[$pp%$nParallel] .= $r." ".$g." ".$b." ";
 			}
 		}
+		$diff .= getDiff($v,$_REQUEST["C"])."\n";
 		$vector[] = $v;
-		$vectorR .= "\n";
+		$vectorR[$pp%$nParallel] .= "\n";
+		$pp++;
 	}
 }
-if($DEBUG == 3){
-	nl2br($vectorR);
+if($DEBUG == ++$debug){// Display vector as table format
+	nl2br(implode("<hr>",$vectorR));
 	if($TIME){
 		$time[] = array(
 			"key"=>"finish",
@@ -211,32 +259,107 @@ if($DEBUG == 3){
 	}
 	exit(0);
 }
-//$fileR = array_search('uri', @array_flip(stream_get_meta_data($GLOBALS[mt_rand()]=tmpfile())));
-//file_put_contents($fileR,$vectorR);
-$cmdR = array_search('uri', @array_flip(stream_get_meta_data($GLOBALS[mt_rand()]=tmpfile())));
-$exeR = "R --slave --vanilla --quiet --file=".$cmdR." --args ".$K."";
-
-file_put_contents($cmdR , <<< END_RCMD
-library(RJSONIO)
+$cmdDiff = array_search('uri', @array_flip(stream_get_meta_data($GLOBALS[mt_rand()]=tmpfile())));
+file_put_contents($cmdDiff,'library(RJSONIO)
 args <- commandArgs(TRUE)
 vect <- read.table("stdin")
 k <- kmeans(vect,as.integer(args[1]),iter.max=30)
-cnt  <- round(k\$centers)
-dist <- cnt[k\$cluster[],]-vect[]
-dir  <- t(apply(dist,1,function(dist){dist>=0}))
-dir[dir==FALSE] <- 0
-result <- as.list(NULL)
-result[["center"]]   <- cnt
-result[["size"]]     <- k\$size
-result[["cluster"]]  <- k\$cluster
-result[["distance"]] <- sqrt(apply(dist^2, 1, sum))
-result[["direction"]]<- dir
-result_j <- toJSON(result)
-write(result_j,"")
-END_RCMD
+write(toJSON(k$cluster),"")
+');
+$descriptorspec = array(
+   0 => array("pipe", "r"),  // stdin は、子プロセスが読み込むパイプです。
+   1 => array("pipe", "w"),  // stdout は、子プロセスが書き込むパイプです。
+   2 => array("pipe", "w") // はファイルで、そこに書き込みます。
 );
-if($DEBUG == 4){
-	echo $exeR."<br/><br/>".nl2br(file_get_contents($cmdR));
+$procDiff = proc_open("R --slave --vanilla --quiet --file=".$cmdDiff." --args ".($nParallel), $descriptorspec, $pipes, "/tmp", NULL);
+//$procDiff = proc_open("R --file=".$cmdDiff." --args ".$nParallel, $descriptorspec, $pipes, "/tmp", NULL);
+if (is_resource($procDiff)) {
+	fwrite($pipes[0],$diff);
+	fclose($pipes[0]);
+	$stdout_j = stream_get_contents($pipes[1]);
+	$stderr_j = stream_get_contents($pipes[2]);
+	fclose($pipes[1]);
+	fclose($pipes[2]);
+	proc_close($procDiff);
+}else{
+	echo "[ERROR] R command";
+	exit(1);
+}
+$preCluster = json_decode($stdout_j,true);
+$preCHist = array();
+$preCSum = 0;
+$vectorR = array();
+$indexR = array();
+foreach($preCluster as $c => $preC){
+	if(!isset($vectorR[$preC - 1])){
+		$vectorR[$preC - 1] = "";
+		$idxR[$preC - 1] = array();
+	}
+	$vectorR[$preC - 1] .= implode(" ",$vector[$c])."\n";
+	$indexR[$preC - 1][] = $c;
+	if(!isset($preCHist[$preC - 1])){
+		$preCHist[$preC - 1] = 1;
+		$preCSum++;
+	}else{
+		$preCHist[$preC - 1]++;
+		$preCSum++;
+	}
+}
+$baseK = round($K * 0.7 / $nParallel);
+$restK = $K - ($baseK * $nParallel);
+
+arsort($preCHist);
+$min = min($preCHist);
+
+$KsR = array();
+foreach($preCHist as $c => $preCh){
+	$addK = round($restK * min(0.7,$preCh / $preCSum));
+	$restK -= $addK;
+	$preCSum -= $preCh;
+	$KsR[$c] = $baseK + $addK;
+}
+ksort($KsR,SORT_NUMERIC);
+
+if($TIME){
+	$time[] = array(
+		"key"=>"pre clustering",
+		"t" => microtime(true)
+	);
+}
+
+if($DEBUG == ++$debug){// Display diff clustering
+	foreach($preCHist as $pchk => $pchv){
+		echo "<b>".$pchk."</b>&nbsp;&nbsp;".$pchv."&nbsp;&nbsp;<b>".$KsR[$pchk]."</b><br/>";
+	}
+	
+	echo "<b>stdout</b>:<br/>".$stdout_j;
+	echo "<hr><b>stderr:</b><br/>";
+	if($TIME){
+		$time[] = array(
+			"key"=>"finish",
+			"t" => microtime(true)
+		);
+		echo "<br/><br/><b>time</b><br/>";
+		echo getTime($time);
+	}
+	exit(0);
+}
+$cmdR = array();
+$rooplimit = 100 * $nParallel;
+for($nparallel = 0;$nparallel < $nParallel;$nparallel++){
+	$cmdR[$nparallel] = sys_get_temp_dir()."/photomosaic_".uniqid();
+	if(file_exists($cmdR[$nparallel])){
+		if($rooplimit--){
+			echo "ループしすぎ！";
+			exit(1);
+		}
+		$nparallel--;
+		continue;
+	}
+	file_put_contents($cmdR[$nparallel] ,$vectorR[$nparallel]);
+}
+if($DEBUG == ++$debug){ //Display R command
+	echo "<b>Commad:</b>php fork.php ".count($cmdR)." ".implode(" ",$cmdR)." ".implode(" ",$KsR)."<hr>";
 	if($TIME){
 		$time[] = array(
 			"key"=>"finish",
@@ -253,27 +376,8 @@ if($TIME){
 		"t" => microtime(true)
 	);
 }
-//exec($exeR);
-//$result_j = system($exeR);
 
-$descriptorspec = array(
-   0 => array("pipe", "r"),  // stdin は、子プロセスが読み込むパイプです。
-   1 => array("pipe", "w"),  // stdout は、子プロセスが書き込むパイプです。
-   2 => array("pipe", "w") // はファイルで、そこに書き込みます。
-);
-$procR = proc_open($exeR, $descriptorspec, $pipes, "/tmp", NULL);
-if (is_resource($procR)) {
-	fwrite($pipes[0],$vectorR);
-	fclose($pipes[0]);
-	$result_j = stream_get_contents($pipes[1]);
-	$error_j = stream_get_contents($pipes[2]);
-	fclose($pipes[1]);
-	fclose($pipes[2]);
-	proc_close($procR);
-}else{
-	echo "[ERROR] R command";
-	exit(1);
-}
+exec("php fork.php ".count($cmdR)." ".implode(" ",$cmdR)." ".implode(" ",$KsR));
 
 if($TIME){
 	$time[] = array(
@@ -281,12 +385,40 @@ if($TIME){
 		"t" => microtime(true)
 	);
 }
-//$result_j = file_get_contents($fileR);
-$result = json_decode($result_j,true);
-if($DEBUG == 5){
-	echo $result_j."<hr>";
-	echo $error_j;
-	echo "<hr>".$vectorR;
+
+$result = array();
+for($nparallel = 0; $nparallel < $nParallel; $nparallel++){
+	$R = json_decode(file_get_contents($cmdR[$nparallel]),true);
+	if(!isset($result["center"])){
+		$result["center"] = array();
+	}
+	$result["center"] = array_merge($result["center"],$R["center"]);
+	if(!isset($result["size"])){
+		$result["size"] = array();
+	}
+	$result["size"] = array_merge($result["size"],$R["size"]);
+	if(!isset($result["cluster"])){
+		$result["cluster"] = array();
+	}
+	$result["cluster"] = array_merge($result["cluster"],$R["cluster"]);
+	if(!isset($result["distance"])){
+		$result["distance"] = array();
+	}
+	$result["distance"] = array_merge($result["distance"],$R["distance"]);
+	if(!isset($result["direction"])){
+		$result["direction"] = array();
+	}
+	$result["direction"] = array_merge($result["direction"],$R["direction"]);
+	if(!isset($result["index"])){
+		$result["index"] = array();
+	}
+	$result["index"] = array_merge($result["index"],$indexR[$nparallel]);
+	if(file_exists($cmdR[$nparallel])){
+		unlink($cmdR[$nparallel]);
+	}
+}
+if($DEBUG == ++$debug){ //Display k-means result as text
+	echo json_encode($result)."<hr>";
 	if($TIME){
 		$time[] = array(
 			"key"=>"finish",
@@ -297,7 +429,7 @@ if($DEBUG == 5){
 	}
 	exit(0);
 }
-if($DEBUG == 6){
+if($DEBUG == ++$debug){//Display k-means result as image
 	function xsqrt($x, $value) {
 		$count = 0; 
 		do{
@@ -335,8 +467,9 @@ if($DEBUG == 6){
 	}
 	shuffle($cols);
 	foreach($result["cluster"] as $idx => $cluster){
-		$x = $idx % ($tarW / $_REQUEST["C"]);
-		$y = floor($idx / ($tarW / $_REQUEST["C"]));
+		$idxx = $result["index"][$idx];
+		$x = $idxx % ($tarW / $_REQUEST["C"]);
+		$y = floor($idxx / ($tarW / $_REQUEST["C"]));
 		imagefilledrectangle ($tar,$x*3,$y*3,$x*3+3,$y*3+3,$cols[$cluster-1]);
 	}
 	if($TIME){
@@ -388,7 +521,7 @@ if($TIME){
 		"t" => microtime(true)
 	);
 }
-if($DEBUG == 7){
+if($DEBUG == ++$debug){//Display all knn queries
 	print <<< ENDOFPRINT
 <html>
 <head>
@@ -492,7 +625,7 @@ if($TIME){
 		"t" => microtime(true)
 	);
 }
-if($DEBUG == 8){
+if($DEBUG == ++$debug){//Display query bucket
 	$urls_js = "['".implode("','",$urls)."']";
 	print <<< ENDOFPRINT
 <html>
